@@ -1,145 +1,30 @@
-package com.example.systemcontroller
+name: Build TomGot APK
 
-import android.Manifest
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
-import android.widget.Button
-import android.widget.EditText
-import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import java.util.Locale
+on:
+  push:
+    branches: [ main, master ]
 
-class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+              uses: actions/checkout@v3
 
-    private lateinit var tts: TextToSpeech
-    private lateinit var speechRecognizer: SpeechRecognizer
+    - name: Set up JDK 17
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'temurin'
+        java-version: '17'
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+    - name: Grant execute permission for Gradle
+      run: chmod +x gradlew
 
-        // TextToSpeech और परमिशन चेक
-        tts = TextToSpeech(this, this)
-        checkPermissions()
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug
 
-        val editText = findViewById<EditText>(R.id.commandInput)
-        val submitButton = findViewById<Button>(R.id.submitButton)
-        val micButton = findViewById<Button>(R.id.micButton)
-
-        // टेक्स्ट टाइप करके कमांड देने के लिए
-        submitButton.setOnClickListener {
-            val userCommand = editText.text.toString()
-            processCommand(userCommand)
-        }
-
-        // बोलकर कमांड देने के लिए माइक बटन
-        micButton.setOnClickListener {
-            startListening()
-        }
-    }
-
-    private fun checkPermissions() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
-        }
-    }
-
-    private fun startListening() {
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "hi-IN")
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
-        }
-
-        speechRecognizer.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {}
-            override fun onBeginningOfSpeech() {}
-            override fun onRmsChanged(rmsdB: Float) {}
-            override fun onBufferReceived(buffer: ByteArray?) {}
-            override fun onEndOfSpeech() {}
-            override fun onError(error: Int) {
-                Toast.makeText(applicationContext, "आवाज़ सुनने में समस्या आई, दोबारा बोलें", Toast.LENGTH_SHORT).show()
-            }
-            override fun onResults(results: Bundle?) {
-                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                if (!matches.isNullOrEmpty()) {
-                    processCommand(matches[0])
-                }
-            }
-            override fun onPartialResults(partialResults: Bundle?) {}
-            override fun onEvent(eventType: Int, params: Bundle?) {}
-        })
-
-        speechRecognizer.startListening(intent)
-    }
-
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            tts.setLanguage(Locale("hi", "IN"))
-        }
-    }
-
-    private fun speakOut(text: String) {
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, null)
-    }
-
-    private fun processCommand(command: String) {
-        val text = command.lowercase()
-        
-        // वेक-वर्ड चेक: "Tom Got" नाम बोलना जरूरी है
-        if (text.contains("tom got") || text.contains("टॉम गॉट") || text.contains("tomgot")) {
-            val cleanCommand = text.replace("tom got", "")
-                .replace("टॉम गॉट", "")
-                .replace("tomgot", "")
-                .trim()
-            
-            when {
-                cleanCommand.contains("whatsapp") || cleanCommand.contains("व्हाट्सएप") -> {
-                    speakOut("व्हाट्सएप खोला जा रहा है")
-                    openApp("com.whatsapp")
-                }
-                cleanCommand.contains("youtube") || cleanCommand.contains("यूट्यूब") -> {
-                    speakOut("यूट्यूब खोला जा रहा है")
-                    openApp("com.google.android.youtube")
-                }
-                cleanCommand.contains("settings") || cleanCommand.contains("सेटिंग्स") -> {
-                    speakOut("सेटिंग्स खोली जा रही है")
-                    val intent = Intent(android.provider.Settings.ACTION_SETTINGS)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(intent)
-                }
-                else -> {
-                    speakOut("हाँ, Tom Got सुन रहा है, बताइए क्या करना है?")
-                }
-            }
-        } else {
-            speakOut("कृपया कमांड देने से पहले Tom Got बोलें")
-        }
-    }
-
-    private fun openApp(packageName: String) {
-        val intent = packageManager.getLaunchIntentForPackage(packageName)
-        if (intent != null) {
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(intent)
-        } else {
-            Toast.makeText(this, "ऐप इंस्टॉल नहीं है", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    override fun onDestroy() {
-        if (::tts.isInitialized) {
-            tts.stop()
-            tts.shutdown()
-        }
-        super.onDestroy()
-    }
-}
+    - name: Upload APK File
+      uses: actions/upload-artifact@v3
+      with:
+        name: tomgot-apk
+        path: app/build/outputs/apk/debug/app-debug.apk
